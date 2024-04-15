@@ -212,11 +212,11 @@ if __name__ == "__main__":
             
             ### Instruction:
             
-            Analyze its operations, logic, and any identifiable patterns to suggest a new suitable function name, do not return the original function name. \n
+            Analyze its operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name. \n
             
-            Only return the suggested name and description of the following code function. \n
+            Only return the suggested name and description of the following code function, strictly in JSON format. \n
             
-            Do not include any unnecessary information that is not related to the name or description of the function. \n
+            Do not include any unnecessary information beyond the JSON output. \n
             
             Code:
             \n

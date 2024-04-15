@@ -33,6 +33,6 @@ stop = ["</s>", "<|EOT|>", "Instruction:"]
 
 min_p = 0.1
 
-temperature = 0.3
+temperature = 0.2
 
 repeat_penalty = 1.1

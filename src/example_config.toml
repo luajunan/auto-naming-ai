@@ -4,16 +4,16 @@
 use_mmap = true
 
 # Utilize CPU threads; set to 0 to prioritize GPU usage over CPU
-n_threads = 6
+n_threads = 4
 
 # Utilize GPU layers for faster processing with a strong GPU
-n_gpu_layers = 33
+n_gpu_layers = -1
 
 # Ensure deterministic model outputs by specifying a seed
 seed = -1
 
 # Toggle verbose logging of model configurations
-verbose = false
+verbose = true
 
 f16_kv = true
 
@@ -27,9 +27,9 @@ rope_freq_base = 0
 
 rope_freq_scale = 0
 
-max_tokens = 5000
+max_tokens = 2000
 
-stop = ["</s>", "<|EOT|>", "Instruction:"]
+stop=["###", "\n"]
 
 min_p = 0.1
 

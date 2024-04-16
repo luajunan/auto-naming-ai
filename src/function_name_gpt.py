@@ -1,8 +1,15 @@
 from models import MODEL_IDENTIFIERS
 from langchain_community.llms import LlamaCpp
 
-# from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
+from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate
+
+
+class CodeAnalyzer(BaseModel):
+    function_name: str = Field(description="Suggested name for the function")
+    function_description: str = Field(description="Description of the function")
 
 
 class FunctionNameGPT:
@@ -66,14 +73,15 @@ class FunctionNameGPT:
         self.rope_freq_scale = config["rope_freq_scale"]
         # Downloading the model and getting its local path
         # self.model_path = self.get_model_path(self.model_identifier)
-        self.model_path = "/Users/junan/.cache/lm-studio/models/TheBloke/deepseek-coder-6.7B-instruct-GGUF/deepseek-coder-6.7b-instruct.Q4_K_M.gguf"
+        # self.model_path = "/Users/junan/.cache/lm-studio/models/TheBloke/deepseek-coder-6.7B-instruct-GGUF/deepseek-coder-6.7b-instruct.Q4_K_M.gguf"
+        self.model_path = "/Users/junan/Desktop/text-generation-webui/models/deepseek-coder-6.7b-instruct.Q4_K_M.gguf"
         self.n_batch = config["n_batch"]
 
         self.max_tokens = config["max_tokens"]
         # Token indicating the end of the model's output
         self.stop = config["stop"]
         # Minimum probability threshold for token generation
-        self.min_p = config["min_p"]
+        # self.min_p = config["min_p"]
         # Sampling temperature for diversity
         self.temperature = config["temperature"]
         # Penalty for repeated token generation to encourage diversity
@@ -94,48 +102,84 @@ class FunctionNameGPT:
             use_mlock=self.use_mlock,
             max_tokens=self.max_tokens,
             stop=self.stop,
-            min_p=self.min_p,
+            # min_p=self.min_p,
             temperature=self.temperature,
             repeat_penalty=self.repeat_penalty,
+            callbacks=[StreamingStdOutCallbackHandler()],
         )
 
-    def build_function_name_few_shot(self, input):
+    def build_function_name_few_shot(self, parser):
 
-        response = """ 
-            {{
-                'name': 'hello_world()',
-                'description': 'This function prints the string hello world.',
-            }}"""
+        format_instructions = parser.get_format_instructions()
+        # And a query intented to prompt a language model to populate the data structure.
         examples = [
             {
-                "Instruction": """
-                Analyze its operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name. \n
+                "Instruction": """                
+                ### Instruction:
                 
-                Only return the suggested name and description of the following code function, strictly in JSON format. \n
+                Analyze the following code's operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name.
+                                
+                Only return the suggested name and description of the following code function, strictly a JSON object.
+                                
+                Do not include any unnecessary information or symbols beyond the JSON output.
                 
-                Do not include any unnecessary information or symbols beyond the JSON output. \n
+                JSON framework must be constructed with double-quotes. Double quotes within strings must be escaped with backslash, single quotes within strings will not be escaped.
+                
+                {format_instructions}
                 
                 Code:
-                
+                        
                 def xxx():
                     print("hello world")
+                    
+                ### Response:
                 """,
-                "Response": response,
-            }
+                "Response": '{{"function_name": "hello_world()", "function_description": "This function prints the string hello world."}}',
+            },
+            {
+                "Instruction": """                
+                ### Instruction:
+                
+                Analyze the following code's operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name.
+                                
+                Only return the suggested name and description of the following code function, strictly a JSON object.
+                                
+                Do not include any unnecessary information or symbols beyond the JSON output.
+                
+                JSON framework must be constructed with double-quotes. Double quotes within strings must be escaped with backslash, single quotes within strings will not be escaped.
+                
+                {format_instructions}
+                
+                Code:
+                        
+                def unknown(n):
+                    unknown_list = [0, 1]  # Initial Fibonacci sequence with first two terms
+                    while len(fib_sequence) < n:
+                        next_term = unknown_list[-1] + unknown_list[-2]
+                        unknown_list.append(next_term)
+                    return unknown[:n]
+                    
+                ### Response:
+                """,
+                "Response": '{{"function_name": "fibonacci(n)", "function_description": "This function returns the fibonacci number at the nth sequence."}}',
+            },
         ]
         example_prompt = PromptTemplate(
             input_variables=["Instruction", "Response"],
-            template="Instruction: {Instruction}\n{Response}",
+            template="{Instruction}\n{Response}",
         )
 
-        prompt = FewShotPromptTemplate(
+        fewshotprompt = FewShotPromptTemplate(
             examples=examples,
             example_prompt=example_prompt,
-            suffix="Instruction: {input}",
+            suffix="""
+                {input} 
+                """,
             input_variables=["input"],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
         )
 
-        return prompt.format(input=input)
+        return fewshotprompt
 
     def build_function_name_prompt(self, code):
         """

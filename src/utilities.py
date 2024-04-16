@@ -1,3 +1,7 @@
+import re
+from pygccxml import utils
+from pygccxml import declarations
+from pygccxml import parser
 import os
 import ast
 
@@ -77,6 +81,52 @@ def parse_py_file(filename):
             function_body = extract_py_function_body(source_code, node)
             print("Function Extracted:", node.name)
             function_bodies.append(function_body)
+
+    return function_bodies
+
+
+def parse_cpp_file(filename):
+
+    # Find the location of the xml generator (castxml or gccxml)
+    generator_path, generator_name = utils.find_xml_generator()
+
+    # Configure the xml generator
+    xml_generator_config = parser.xml_generator_configuration_t(
+        xml_generator_path=generator_path, xml_generator=generator_name
+    )
+
+    # Parse the C++ file
+    decls = parser.parse([filename], xml_generator_config)
+
+    # Read the source code file
+    with open(filename, "r") as file:
+        source_code = file.read()
+
+    # Get the global namespace
+    global_namespace = declarations.get_global_namespace(decls)
+    function_bodies = []
+    # Define a regular expression pattern to match function definitions
+    function_pattern = re.compile(
+        r"\b(?:\w+\s+)*\w+\s*\(.*?\)\s*{.*?}", re.MULTILINE | re.DOTALL
+    )
+
+    # Iterate over all declarations in the global namespace
+    for decl in global_namespace.declarations:
+        # Check if the declaration is a free function
+        if isinstance(decl, declarations.free_function_t):
+            # Print the name of the function
+            print("Function:", decl.name)
+            # Find the function body in the source code using the function name
+            match = re.search(
+                rf"\b{decl.name}\s*\(.*?\)\s*{{.*?}}",
+                source_code,
+                re.MULTILINE | re.DOTALL,
+            )
+            if match:
+                function_body = match.group(0)
+                # Print the text body of the function
+                print("Function Extracted:", function_body)
+                function_bodies.append(function_body)
 
     return function_bodies
 

@@ -1,22 +1,25 @@
 import streamlit as st
 import json
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 # from langchain.vectorstores import Chroma
-# from langchain import PromptTemplate
+from langchain.prompts import PromptTemplate
+
 # from langchain.chains import RetrievalQA
 # from langchain.embeddings import GPT4AllEmbeddings
 # from langchain.chat_models import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
 import time
 
 # from langchain.schema import HumanMessage, SystemMessage
 import os
 
 # from dotenv import load_dotenv, find_dotenv
-from utilities import parse_c_file, parse_py_file, filter_output
+from utilities import parse_c_file, parse_py_file, filter_output, parse_cpp_file
 from agent import LLM_Agent
 from models import MODEL_IDENTIFIERS
 from config import load_user_config
-from function_name_gpt import FunctionNameGPT
+from function_name_gpt import FunctionNameGPT, CodeAnalyzer
 
 # embeddings = GPT4AllEmbeddings()
 
@@ -48,6 +51,8 @@ def load_document(file):
         functions = parse_c_file(file)
     elif extension == ".py":
         functions = parse_py_file(file)
+    elif extension == ".cpp":
+        functions = parse_cpp_file(file)
     else:
         print("Document format is not supported!")
         return None
@@ -165,7 +170,7 @@ if __name__ == "__main__":
     st.subheader("Code Analysis Application 🤖")
 
     # file uploader widget
-    uploaded_file = st.file_uploader("Upload a file:", type=["c", "py"])
+    uploaded_file = st.file_uploader("Upload a file:", type=["c", "py", "cpp"])
 
     # Initiate Local LLM
     config = load_user_config("example_config.toml")
@@ -205,42 +210,62 @@ if __name__ == "__main__":
         st.subheader("Functions and Suggested Function Names:")
         col1, col2, col3 = st.columns(3)
 
+        # Init Parser
+        parser = JsonOutputParser(pydantic_object=CodeAnalyzer)
+        format_instructions = parser.get_format_instructions()
+
+        fewshotprompt = gpt.build_function_name_few_shot(parser)
+
+        chain = fewshotprompt | gpt.llm | parser
+
         for function in functions:
             col1.text_area("Function", value=function, height=50)
 
-            prompt = f"""
-            
+            # Below is an instruction that describes a task. Write a response that appropriately completes the request. \n
+            code_query = """
             ### Instruction:
+
+            Analyze the following code's operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name.
+
+            Only return the suggested name and description of the following code function, strictly a JSON object.
+
+            Do not include any unnecessary information or symbols beyond the JSON output.
             
-            Analyze its operations, logic, and any identifiable patterns to suggest a suitable function name, do not return the original function name. \n
+            JSON framework must be constructed with double-quotes. Double quotes within strings must be escaped with backslash, single quotes within strings will not be escaped.
             
-            Only return the suggested name and description of the following code function, strictly in JSON format. \n
-            
-            Do not include any unnecessary information beyond the JSON output. \n
+            {format_instructions}
             
             Code:
-            \n
+
             {function}
-            
+
             ### Response:
             """
-            fewshotprompt = gpt.build_function_name_few_shot(prompt)
-            llm_output = gpt.llm.invoke(fewshotprompt)
-            print(llm_output)
-            print(type(llm_output))
-            json_output = filter_output(str(llm_output))
+
+            prompt = PromptTemplate.from_template(
+                code_query,
+                partial_variables={
+                    "format_instructions": parser.get_format_instructions()
+                },
+            ).format(function=function)
+
+            json_output = chain.invoke({"input": prompt})
+            # llm_output = gpt.llm.invoke(fewshotprompt)
+            # print(llm_output)
+            # print(type(llm_output))
+            # json_output = filter_output(str(llm_output))
             print(json_output)
             if json_output:
 
                 col2.text_area(
                     "Suggested Function Name",
-                    value=json_output["name"],
+                    value=json_output["function_name"],
                     height=50,
                 )
 
                 col3.text_area(
                     "Suggested Function Description",
-                    value=json_output["description"],
+                    value=json_output["function_description"],
                     height=50,
                 )
             else:

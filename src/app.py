@@ -40,6 +40,8 @@ from function_name_gpt import FunctionNameGPT, CodeAnalyzer
 #     openai_api_key=os.environ["OPENAI_API_KEY"],
 # )
 
+DATA_DIR = os.path.join(os.getcwd(), "data")
+
 
 # loading PDF, DOCX and TXT files as LangChain Documents
 def load_document(file):
@@ -155,7 +157,19 @@ def load_document(file):
 #             answers.append(response["result"])
 #     st.success("Documents Retrieved!")
 
+
 #     return answers
+
+
+# Function to save uploaded file to data directory
+def save_uploaded_file(uploaded_file):
+    # Create data directory if it doesn't exist
+    os.makedirs("data", exist_ok=True)
+
+    # Write the file content to data directory
+    with open(os.path.join("data", uploaded_file.name), "wb") as f:
+        f.write(uploaded_file.read())
+    st.success("File saved successfully!")
 
 
 # # clear the chat history from streamlit session state
@@ -171,6 +185,14 @@ if __name__ == "__main__":
 
     # file uploader widget
     uploaded_file = st.file_uploader("Upload a file:", type=["c", "py", "cpp"])
+
+    if uploaded_file is not None:
+        # Display file details
+        file_details = {"Filename": uploaded_file.name, "FileType": uploaded_file.type}
+        st.write(file_details)
+
+        # Save the file to the data directory
+        save_uploaded_file(uploaded_file)
 
     # Initiate Local LLM
     config = load_user_config("example_config.toml")
@@ -193,7 +215,7 @@ if __name__ == "__main__":
 
     if uploaded_file:
         # Read and embed file
-        file_name = os.path.join("../data", uploaded_file.name)
+        file_name = os.path.join(DATA_DIR, uploaded_file.name)
 
         functions = load_document(file_name)
         # chunks = chunk_data(data, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -279,3 +301,6 @@ if __name__ == "__main__":
                 )
 
         st.success(f"Function Name Suggestions Generated! \n Source: {file_name}!")
+
+        # Clean up
+        os.remove(file_name)
